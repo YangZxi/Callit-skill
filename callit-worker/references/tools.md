@@ -1,5 +1,43 @@
 # Callit MCP Tools
 
+## `create_worker`
+
+作用：
+
+- 创建新的 Worker
+
+关键参数：
+
+- `name`
+- `description` 可选
+- `runtime`
+- `route`
+- `timeout_ms`
+- `enabled` 可选
+
+副作用：
+
+- 成功后会自动生成入口文件
+
+## `update_worker`
+
+作用：
+
+- 更新 Worker 基础信息
+
+关键参数：
+
+- `id`
+- `name`
+- `description` 可选
+- `route`
+- `timeout_ms`
+- `enabled` 可选
+
+限制：
+
+- 不允许传 `runtime`
+
 ## `search_workers`
 
 作用：
@@ -12,7 +50,7 @@
 
 返回重点：
 
-- 匹配到的 Worker 列表，包含 `id`、`name`、`runtime`、`route`、`timeout_ms`、`enabled`
+- 匹配到的 Worker 列表，包含 `id`、`name`、`description`、`runtime`、`route`、`timeout_ms`、`enabled`
 
 ## `list_worker_files`
 
@@ -91,39 +129,3 @@
 限制：
 
 - 不能删除 `main.py` 或 `main.js`
-
-## `create_worker`
-
-作用：
-
-- 创建新的 Worker
-
-关键参数：
-
-- `name`
-- `runtime`
-- `route`
-- `timeout_ms`
-- `enabled` 可选
-
-副作用：
-
-- 成功后会自动生成入口文件
-
-## `update_worker`
-
-作用：
-
-- 更新 Worker 基础信息
-
-关键参数：
-
-- `id`
-- `name`
-- `route`
-- `timeout_ms`
-- `enabled` 可选
-
-限制：
-
-- 不允许传 `runtime`

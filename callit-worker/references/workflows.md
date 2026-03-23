@@ -8,13 +8,17 @@
 2. 如果已存在疑似目标，先向用户确认是复用还是新建
 3. 调用 `create_worker(name, runtime, route, timeout_ms, enabled)`
 4. 如果要编写 Worker 代码，先读取 [worker_introduction.md](./worker_introduction.md)
-5. 根据需要继续调用 `update_worker_file` 或 `upload_worker_file` 写入业务代码
-6. 如有必要，调用 `list_worker_files` 或 `get_worker_file` 进行确认
+5. 优先按单文件原则在 `main.py` 或 `main.js` 中实现功能；只有在逻辑明显复杂时再拆分多文件
+6. 根据需要继续调用 `update_worker_file` 或 `upload_worker_file` 写入业务代码
+7. 本地通过 CLI 命令测试代码能否正常运行，必要时可以临时编写测试文件辅助验证
+8. 上传到线上后，通过 `curl` 测试对应 HTTP 接口
+9. 如有必要，调用 `list_worker_files` 或 `get_worker_file` 进行确认
 
 注意：
 
 - `create_worker` 成功后会自动生成入口文件
 - 不要在创建后立刻删除入口文件
+- 如果不清楚线上 `host`，先向用户索取；如果用户允许，也可以跳过部署后测试
 
 ## 更新 Worker 基础信息
 
@@ -35,14 +39,20 @@
 
 1. 调用 `search_workers(keyword)` 定位目标 Worker，如果你已经有确定的 Worker ID，可以直接跳过这一步
 2. `list_worker_files(worker_id)`
-3. `get_worker_file(worker_id, filename)`
+3. 优先拉取入口文件 `main.py` 或 `main.js`
 4. 如果准备改动 Worker 入口代码或核心响应逻辑，先读取 [worker_introduction.md](./worker_introduction.md)
-5. 根据需求选择：
+5. 根据本次开发需求、代码中的引用关系，以及本地 CLI 测试报错，再继续拉取相关文件
+6. 对图片、媒体等非文本文件，优先使用本地 mock 的方式测试；只有在测试不通过，或代码强依赖某个具体文件时，再考虑拉取原文件
+7. 优先按单文件原则在 `main.py` 或 `main.js` 中补充功能，只有在逻辑复杂时再拆分多文件
+8. 根据需求选择：
    - 改已有文件：`update_worker_file`
    - 新增或覆盖上传文件：`upload_worker_file`
-6. 需要确认时，再次 `get_worker_file` 或 `list_worker_files`
+9. 本地通过 CLI 命令测试代码能否正常运行，必要时可以临时编写测试文件辅助验证
+10. 上传到线上后，通过 `curl` 测试对应 HTTP 接口
+11. 需要确认时，再次 `get_worker_file` 或 `list_worker_files`
 
 默认不要跳过第 3 步，除非用户明确要求直接覆盖。
+如果不清楚线上 `host`，先向用户索取；如果用户允许，也可以跳过部署后测试。
 
 ## 删除 Worker 文件
 
@@ -67,3 +77,5 @@
 - 用户描述的路由规则不清楚
 - 用户要求修改 `runtime`
 - `callit-mcp` 不可用或未配置
+- 不清楚线上 Callit 平台的 `host`
+- 用户是否允许跳过部署后测试
