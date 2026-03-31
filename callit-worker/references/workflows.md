@@ -4,9 +4,10 @@
 
 按这个顺序执行：
 
-1. 调用 `search_workers(keyword)`，确认没有同名或相近用途的 Worker
-2. 如果已存在疑似目标，先向用户确认是复用还是新建
-3. 调用 `create_worker(name, runtime, route, timeout_ms, enabled)`
+1. 调用 `search_workers(keyword)`，确认没有同名或相近用途的 Worker，如果已存在疑似目标，先向用户确认是复用还是新建
+2. 出具 Worker 名称、route 等基础信息，然后发给用户进行确认
+   * route。路由默认需要以 `/<uuid>/` 开头（uuid 需要你生成），然后再接上 Worker 的功能相关的路径；如果用户提供了自定义的路径，则直接使用用户提供的路径。例如：`/<uuid>/cur_time`（你生成的），`/weather`（用户提供的）
+3. 用刚刚的信息调用 `create_worker(...args)` 来进行新建
 4. 如果要编写 Worker 代码，先读取 [worker_introduction.md](./worker_introduction.md)
 5. 优先按单文件原则在 `main.py` 或 `main.js` 中实现功能；只有在逻辑明显复杂时再拆分多文件
 6. 根据需要继续调用 `update_worker_file` 或 `upload_worker_file` 写入业务代码
