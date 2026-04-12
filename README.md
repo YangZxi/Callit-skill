@@ -28,7 +28,10 @@ Fetch and follow instructions from https://raw.githubusercontent.com/YangZxi/Cal
 You need to first ask the user for the callit service URL and MCP Token.
 If the user only provides a host (for example, `example.com`), add the scheme and `/mcp` path as needed.
 1. Name the MCP `callit-mcp`, and use HTTP transport.
-2. Authenticate with the HTTP header `Authorization: Bearer <callit-mcp-token>`.
+2. Authentication (preferred):
+2.1 Use the HTTP header: `Authorization: Bearer <callit-mcp-token>`.
+2.2 If the client cannot set custom headers or header auth fails, try the query param: `http://<host>/mcp?token=<callit-mcp-token>`.
+2.3 If both are present, the header takes precedence; an incorrect header token returns `401`.
 
 ### Codex
 1. **Clone the Callit-skill repository:**  
@@ -61,4 +64,3 @@ cp /tmp/Callit-skill/<skill-name> ~/.codex/skills/
 3. **Delete cloned items as needed:**  
 
 安装完成后，提醒用户可能需要重启 agent 应用来加载新技能。
-
