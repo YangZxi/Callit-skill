@@ -3,27 +3,29 @@
 
 在 Worker 中，你可以使用 Python 或 Node.js 编写自定义代码来处理 HTTP 请求，实现动态响应、数据处理、文件操作等功能。 
 
-除官方库之外，你还可以安装第三方依赖来扩展 Worker 的能力，例如使用 `requests` 库在 Python Worker 中发起 HTTP 请求，或在 Node Worker 中使用 `lodash` 进行数据处理。具体参考 [依赖库来源](#依赖库来源) 一节。
+除官方库之外，你还可以安装第三方依赖来扩展 Worker 的能力，例如在 Python Worker 中使用 `requests` 库发起 HTTP 请求，或在 Node Worker 中使用 `lodash` 进行数据处理。
 
-## 工作原理
-
-每个 Worker 对应一个独立目录，目录路径通常为：
-
-`{DATA_DIR}/workers/{worker_id}`
+## Worker 工作流程
 
 当 HTTP 请求命中某个 Worker 路由后，系统会：
+1. 读取并解析请求内容，包括请求方法、路径、查询参数、请求头和请求体等信息
+2. 通过请求路径找到对应 Worker 程序
+4. 执行 Worker 入口文件
+5. 读取标准输出中的 `stdout` / `stderr`
+6. 将 `stdout` 中的结构化结果解析为 HTTP 响应
 
-1. 读取并解析请求内容。
-2. 组装 `WorkerInput` 上下文。
-3. 将 `WorkerInput` 以 JSON 形式写入脚本进程的 `stdin`。
-4. 执行 Worker 主文件。
-5. 读取脚本的 `stdout` / `stderr`。
-6. 将 `stdout` 中的结构化结果解析为 HTTP 响应。
-7. 当接收到文件上传时，系统会把文件暂存到服务器的运行时数据目录，并把文件信息（如路径、大小、类型）传入 `request.body[filename]` 中。沙箱内对应的可见路径为 `/tmp/upload`。
+* 当接收到文件上传时，系统会把文件暂存到服务器的运行时数据目录，并把文件信息（如路径、大小、类型）传入 `request.body[filename]` 中。沙箱内对应的可见路径为 `/tmp/upload`
 
 Worker 中的脚本仅允许读写 `/tmp` 文件夹，其他文件皆为**只读**。
 
-另外，平台内置了 `kv` 能力，你可以使用它来存储、读取持久化的字符串数据。  
+另外，平台内置了 `kv`、`db` 能力，你可以使用它来存储、读取持久化的字符串数据。具体规则参考 [Worker SDK 文档](./worker_sdk.md)。
+
+## 环境变量使用说明
+
+创建/编辑 Worker 时可设置环境变量，多个变量请使用分号 `;` 分隔，执行时会自动注入到 Worker 运行环境。  
+在 Worker 内，你可以使用系统环境变量接口来访问这些变量：
+- Python：`os.environ.get("KEY")`
+- Node.js：`process.env.KEY`
 
 ## 入口文件要求
 
@@ -50,23 +52,7 @@ def handler(ctx):
     ...
 ```
 
-如果未定义可调用的 `handler(ctx)`，运行时会报错：
-
-Python Worker 还可以直接使用平台注入的 `kv`：
-
-```python
-import json
-from callit import kv
-
-def handler(ctx):
-    kv_client = kv.new_client("group1")
-    kv_client.set("session", json.dumps({"id": "1234"}), 300)
-    value = kv_client.get("session")
-    return {
-        "status": 200,
-        "body": value
-    }
-```
+如果未定义可调用的 `handler(ctx)`，运行时会报错
 
 ### Node
 
@@ -88,26 +74,7 @@ exports.handler = function (ctx) {
 }
 ```
 
-如果没有导出可调用的 `handler`，运行时会报错：
-
-Node Worker 也可以直接使用平台注入的 `kv`：
-
-```javascript
-const { kv } = require("callit");
-
-async function handler(ctx) {
-  const kvClient = kv.newClient("group1");
-  await kvClient.set("session", JSON.stringify({ id: "1234" }), 300);
-  const value = await kvClient.get("session");
-
-  return {
-    status: 200,
-    body: value
-  };
-}
-
-module.exports = handler;
-```
+如果没有导出可调用的 `handler`，运行时会报错
 
 ## SDK 能力
 
@@ -117,7 +84,6 @@ Worker 运行时内置了 `kv` 和 `db` 两类 SDK 能力。
 - `db` 用于访问 Worker 可用的共享数据库
 
 详细的调用方式、参数规则、返回值结构和代码示例，请参考：
-
 - [Worker SDK 文档](./worker_sdk.md)
 
 ## 模板示例
@@ -307,152 +273,218 @@ Worker 最终必须通过 `stdout` 输出一个合法 JSON，用于表示 HTTP �
 {
   "status": 200,
   "headers": {
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "X-Trace": "abc"
   },
   "body": {
-    "message": "ok"
+    "ok": true,
+    "message": "hello"
   }
 }
 ```
 
-## 上传文件
+### 返回文件样例
 
-当请求是 `multipart/form-data` 时，Worker 可以在 `request.body` 中读取文本字段和上传文件信息。
+如果希望直接返回 Worker 目录中的文件内容，可以输出：
 
-上传文件对象包含：
+```json
+{
+  "status": 200,
+  "file": "output/report.txt",
+  "headers": {
+    "Content-Type": "text/plain; charset=utf-8"
+  },
+  "body": null
+}
+```
 
-- `filename`：原始文件名
-- `content_type`：文件类型
-- `size`：文件大小（字节）
-- `path`：文件在沙箱中的可访问路径
+说明：
 
-其中 `path` 通常位于 `/tmp/upload/...` 下，可以直接读取。
+- `file` 必须是 Worker 目录内的相对路径
+- 不允许越界访问 Worker 目录外的文件
 
-### Python 上传文件示例
+## Worker 代码开发建议
+
+- 保持 `handler(ctx)` 为纯函数风格，便于调试和测试
+- 尽量返回结构化 JSON，不要手工拼接字符串响应
+- 需要记录调试信息时，优先输出简洁日志，避免写入超大内容
+- 如果依赖安装成功但运行时报找不到包，优先检查 runtime 是否一致
+
+## Worker example
+
+以下示例均以 Python Worker 为例，默认主文件名为 `main.py`。
+
+### 上传文件
+
+适用场景：
+
+- 前端或客户端通过 `multipart/form-data` 上传文件
+- Worker 读取上传文件元信息，必要时再读取文件内容
+
+说明：
+
+- `multipart/form-data` 请求时，`request.body_str` 会是空字符串
+- 上传文件信息会出现在 `request.body`
+- 文件会被暂存到服务器临时目录，字段中会包含可读取的 `path`
 
 ```python
+import os
+
+
 def handler(ctx):
     request = ctx.get("request", {})
-    body = request.get("body", {})
-    file_info = body.get("file")
-    if not file_info:
-        return {"status": 400, "body": {"error": "missing file"}}
+    form = request.get("body", {}) or {}
+    files = form.get("file", [])
 
-    with open(file_info["path"], "r", encoding="utf-8") as f:
-        content = f.read()
+    if not files:
+        return {
+            "status": 400,
+            "body": {
+                "error": "缺少上传文件，字段名应为 file"
+            }
+        }
+
+    first = files[0]
+    file_path = first.get("path", "")
+    file_size = 0
+
+    if file_path and os.path.exists(file_path):
+        file_size = os.path.getsize(file_path)
 
     return {
         "status": 200,
         "body": {
-            "filename": file_info["filename"],
-            "content": content
+            "message": "上传成功",
+            "filename": first.get("filename"),
+            "content_type": first.get("content_type"),
+            "size": file_size,
+            "tmp_path": file_path,
+            "form_fields": form
         }
     }
 ```
 
-### Node 上传文件示例
+对应的 `stdin` 结构通常类似：
 
-```javascript
-const fs = require("fs");
-
-function handler(ctx) {
-  const { request } = ctx;
-  const fileInfo = request.body?.file;
-  if (!fileInfo) {
-    return {
-      status: 400,
-      body: { error: "missing file" }
-    };
-  }
-
-  const content = fs.readFileSync(fileInfo.path, "utf8");
-  return {
-    status: 200,
-    body: {
-      filename: fileInfo.filename,
-      content,
-    }
-  };
+```json
+{
+  "request": {
+    "method": "POST",
+    "body": {
+      "title": "demo",
+      "file": [
+        {
+          "filename": "hello.txt",
+          "content_type": "text/plain",
+          "size": 12,
+          "path": "/tmp/upload/hello.txt"
+        }
+      ]
+    },
+    "body_str": ""
+  },
+  "event": {}
 }
-
-module.exports = handler;
 ```
 
-## 下载文件
+### 下载文件
 
-如果希望返回文件下载，可以通过 `file` 字段指定 Worker 目录中的相对路径，或 `/tmp/` 下的临时文件路径。
+适用场景：
 
-### Python 文件下载示例
+- Worker 动态生成文件后返回给客户端下载
+- 或直接返回 Worker 目录中已有的文件
+
+说明：
+
+- Worker 在沙箱内只能写 `/tmp`，不能写 Worker 根目录
+- 如果是动态生成文件，应该先把文件写到 `/tmp`，再通过 `file` 字段返回 `/tmp/...` 路径
+- 如果返回的是 Worker 目录中预先存在的文件，仍然使用相对路径即可
 
 ```python
+import os
+
+
 def handler(ctx):
-    path = "/tmp/output.txt"
-    with open(path, "w", encoding="utf-8") as f:
+    output_dir = "/tmp/output"
+    os.makedirs(output_dir, exist_ok=True)
+
+    target = os.path.join(output_dir, "report.txt")
+    with open(target, "w", encoding="utf-8") as f:
         f.write("hello from callit\n")
+        f.write(f"request_id={ctx['event']['request_id']}\n")
+
     return {
         "status": 200,
-        "file": path
+        "file": "/tmp/output/report.txt",
+        "headers": {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Disposition": "attachment; filename=report.txt"
+        },
+        "body": None
     }
 ```
 
-### Node 文件下载示例
-
-```javascript
-const fs = require("fs");
-
-function handler(ctx) {
-  const path = "/tmp/output.txt";
-  fs.writeFileSync(path, "hello from callit\n", "utf8");
-  return {
-    status: 200,
-    file: path,
-  };
-}
-
-module.exports = handler;
-```
-
-## 返回 HTML 页面
-
-Worker 可以直接返回 HTML 字符串，并通过 `headers` 指定 `Content-Type`。
-
-### Python HTML 示例
+如果只是返回 Worker 目录里已有文件，也可以直接：
 
 ```python
 def handler(ctx):
+    return {
+        "status": 200,
+        "file": "./manual.pdf",
+        "headers": {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": "attachment; filename=manual.pdf"
+        },
+        "body": None
+    }
+```
+
+### 使用 Worker 返回 HTML 页面
+
+适用场景：
+
+- 返回简单静态页面
+- 根据请求参数动态拼接 HTML
+- 做轻量级页面渲染
+
+说明：
+
+- 返回 HTML 可以通过将内容放入`body` 字段，或通过 `file` 字段返回 Worker 目录中的 HTML 文件
+- 设置 `Content-Type` 为 `text/html` 以确保浏览器正确解析
+- `index.html` 必须存在于当前 Worker 目录下
+- `file` 必须使用相对路径，不能写成绝对路径
+
+1. 使用静态文件返回 HTML 页面（推荐） 
+
+```python
+def handler(ctx):
+    return {
+        "status": 200,
+        "file": "index.html",
+        "headers": {
+            "Content-Type": "text/html; charset=utf-8"
+        },
+        "body": None
+    }
+```
+
+1. 使用 HTML 代码直接返回（适合小页面）
+
+```python
+def handler(ctx):
+    name = "Callit"
+    html = f"""
+<body>
+  <h1>Hello, {name}</h1>
+  <p>这是一个由 Worker 返回的 <span style="color: red;">HTML</span> 页面。</p>
+</body>
+""".strip()
+
     return {
         "status": 200,
         "headers": {
             "Content-Type": "text/html; charset=utf-8"
         },
-        "body": "<h1>Hello Callit</h1>"
+        "body": html
     }
 ```
-
-### Node HTML 示例
-
-```javascript
-function handler(ctx) {
-  return {
-    status: 200,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-    },
-    body: "<h1>Hello Callit</h1>",
-  };
-}
-
-module.exports = handler;
-```
-
-## 依赖库来源
-
-Worker 可以使用平台内置 SDK，也可以安装第三方依赖。
-
-当前依赖来源通常包括：
-
-- 平台运行时预置依赖
-- Worker 自身安装的依赖
-
-如果依赖安装成功但运行时报找不到包，优先检查 runtime 是否一致。
-
