@@ -8,7 +8,7 @@
 你可以在 Worker 中直接使用：
 
 - Python: `from callit import kv, db`
-- Node: `const { kv, db } = require("callit")`
+- Node: `import { kv, db } from "callit"` 或 `const { kv, db } = require("callit")`
 
 ## kv 能力
 
@@ -24,7 +24,8 @@ default_client = kv.new_client()
 ```
 
 ```javascript
-const { kv } = require("callit");
+import { kv } from "callit";
+// const { kv } = require("callit"); // CommonJS 模式
 
 const kvClient = kv.newClient("group1");
 const defaultClient = kv.newClient();
@@ -32,8 +33,7 @@ const defaultClient = kv.newClient();
 
 ### namespace 规则
 
-- `namespace` 可为 `None/null/""/非空字符串`
-- 当 `namespace` 为 `None/null/""` 时，SDK 会自动使用当前 `worker_id`
+- `namespace` 可为 `None/null/""/非空字符串`。当 `namespace` 为 `None/null/""` 时，SDK 会自动使用当前 `worker_id`
 - `namespace` 只用于当前 kv client 的 key 隔离，不影响其他 client
 
 ### 方法说明
@@ -70,7 +70,8 @@ ttl = kv_client.ttl("session")
 ```
 
 ```javascript
-const { kv } = require("callit");
+import { kv } from "callit";
+// const { kv } = require("callit"); // CommonJS 模式
 
 const kvClient = kv.newClient("group1");
 await kvClient.set("session", JSON.stringify({ id: 123 }), 300);
@@ -81,7 +82,7 @@ const ttl = await kvClient.ttl("session");
 
 ## db 能力
 
-`db` 是一个 client 工厂，用于访问 Worker 可用的共享数据库。
+`db` 是一个 client 工厂，用于访问 Worker 可用的共享数据库。默认使用当前 worker_id 作为隔离命名空间。
 
 ### 创建 client
 
@@ -93,7 +94,8 @@ group_client = db.new_client("group1")
 ```
 
 ```javascript
-const { db } = require("callit");
+import { db } from "callit";
+// const { db } = require("callit"); // CommonJS 模式
 
 const dbClient = db.newClient();
 const groupClient = db.newClient("group1");
@@ -101,8 +103,7 @@ const groupClient = db.newClient("group1");
 
 ### namespace 规则
 
-- `db.new_client(namespace)` / `db.newClient(namespace)` 的 `namespace` 规则与 `kv` 相同
-- 当 `namespace` 为 `None/null/""` 时，SDK 会自动使用当前 `worker_id`
+- `namespace` 可为 `None/null/""/非空字符串`。当 `namespace` 为 `None/null/""` 时，SDK 会自动使用当前 `worker_id`
 - `namespace` 只作用于 builder 生成的表名
 - builder 在执行 `select / insert / update / delete` 时，会把表名改写为：
   - `<namespace>_<table_name>`
@@ -110,7 +111,6 @@ const groupClient = db.newClient("group1");
 - `db.exec(sql, ...args)` 不会自动改写表名
 
 示例：
-
 - `db.newClient("group1").select("users").exec()` 实际访问 `group1_users`
 - `db.newClient("group1").select("group1_users").exec()` 实际访问 `group1_users`
 - `db.newClient("group1").select("GROUP1_users").exec()` 实际访问 `group1_GROUP1_users`
@@ -120,11 +120,9 @@ const groupClient = db.newClient("group1");
 ### 原始 SQL 接口
 
 client 提供原始接口：
-
 - `exec(sql, ...args)`
 
 约定如下：
-
 - 使用 `?` 作为占位符传参
 - 平台执行时会使用参数绑定，不会把参数直接拼接到 SQL 字符串中
 - 所有 Worker 共用同一个数据库
@@ -143,7 +141,6 @@ client 提供原始接口：
 ```
 
 规则如下：
-
 - 查询类 SQL：主要读取 `rows`
 - `update/delete`：主要读取 `rows_affected`
 - `insert`：主要读取 `last_insert_id`
@@ -159,7 +156,8 @@ rows = result["rows"]
 ```
 
 ```javascript
-const { db } = require("callit");
+import { db } from "callit";
+// const { db } = require("callit"); // CommonJS 模式
 
 const dbClient = db.newClient();
 const result = await dbClient.exec("select * from users where status = ?", 1);
@@ -169,7 +167,6 @@ const rows = result.rows;
 ### Builder 接口
 
 除原始 `exec` 外，client 还提供四类 builder：
-
 - `select(table, ...columns)`
 - `insert(table)`
 - `update(table)`
@@ -207,7 +204,6 @@ const rows = await db
 ```
 
 返回值：
-
 - 固定返回数组，例如：
 
 ```json
@@ -245,7 +241,6 @@ const lastInsertId = await db
 ```
 
 返回值：
-
 - 固定返回 `last_insert_id`
 - 例如：`200001`
 
@@ -288,7 +283,6 @@ const rowsAffected = await db
 ```
 
 返回值：
-
 - 固定返回影响行数
 - 例如：`1`
 
@@ -319,7 +313,6 @@ const rowsAffected = await db
 ```
 
 返回值：
-
 - 固定返回影响行数
 - 例如：`1`
 

@@ -30,16 +30,13 @@ Worker 中的脚本仅允许读写 `/tmp` 文件夹，其他文件皆为**只读
 ## 入口文件要求
 
 Worker 目录中必须包含主代码文件，文件名由 runtime 决定：
-
 - Python Worker：必须包含 `main.py`
 - Node Worker：必须包含 `main.js`
 
 如果主文件缺失，Worker 执行会直接失败。
-
 在 `main.xx` 入口文件中必须提供 `handler` 方法，用于接收执行上下文并返回响应结果。
 
 如果脚本通过 `result.file` 返回文件路径：
-
 - 相对路径会按 Worker 根目录解析
 - 以 `/tmp/` 开头的路径会按运行时数据目录解析
 
@@ -51,10 +48,38 @@ Worker 目录中必须包含主代码文件，文件名由 runtime 决定：
 def handler(ctx):
     ...
 ```
-
 如果未定义可调用的 `handler(ctx)`，运行时会报错
 
 ### Node
+
+Node Worker 的入口文件始终是 `main.js`，模块类型由 `package.json` 的 `"type"` 决定：
+- 当 `package.json` 中 `"type": "module"` 时，按 ESM 执行
+- 当 `package.json` 不存在，或 `"type"` 不是 `"module"` 时，按 CommonJS 执行
+Node Worker 默认使用 ESM 模式，如果你有特殊需求需要使用 CommonJS，可以删除 `package.json` 文件或把 `"type"` 设置为空
+
+#### ESM(推荐)
+
+新建 Node Worker 默认会生成 `package.json`：
+
+```json
+{
+  "type": "module"
+}
+```
+
+此时 `main.js` 必须通过 ESM 导出 `handler`：
+
+```javascript
+export default async function handler(ctx) {
+  ...
+}
+```
+
+说明：
+- ESM 相对导入必须带扩展名，例如 `./lib/helper.js`
+- ESM 模式下可直接 `import { kv, db } from "callit"`
+
+#### CommonJS
 
 `main.js` 必须通过 CommonJS 导出 `handler`：
 
@@ -79,7 +104,6 @@ exports.handler = function (ctx) {
 ## SDK 能力
 
 Worker 运行时内置了 `kv` 和 `db` 两类 SDK 能力。
-
 - `kv` 用于字符串键值存储
 - `db` 用于访问 Worker 可用的共享数据库
 
@@ -109,7 +133,7 @@ def handler(ctx):
 ### Node
 
 ```javascript
-function handler(ctx) {
+export default async function handler(ctx) {
   const { request } = ctx;
 
   return {
@@ -123,14 +147,11 @@ function handler(ctx) {
     }
   };
 }
-
-module.exports = handler
 ```
 
 ## context 结构
 
 Worker 接收到的上下文模型为 `WorkerInput`：
-
 ```json
 {
   "request": {},
@@ -139,7 +160,6 @@ Worker 接收到的上下文模型为 `WorkerInput`：
 ```
 
 其中包含两部分：
-
 - `request`：当前 HTTP 请求信息
 - `event`：当前 Worker 执行事件信息
 
@@ -184,12 +204,12 @@ Worker 接收到的上下文模型为 `WorkerInput`：
 
 #### `request.body`
 
-- 类型：`any`
+- 类型：`object | array`
 - 来源：根据 `Content-Type` 对请求体做结构化解析后的结果
 - 说明：
-  - `application/json`：解析为 JSON 对象或数组
-  - `application/x-www-form-urlencoded`：解析为键值对象
-  - `multipart/form-data`：解析为表单字段和文件元信息
+  - `application/json`：解析为 JSON 对象{}或数组[]
+  - `application/x-www-form-urlencoded`：解析为 JSON 对象 {}
+  - `multipart/form-data`：同 application/x-www-form-urlencoded，文件数据会以键值对对象形式传入，具体参考 [上传文件示例](#上传文件)
   - 其他类型：默认返回空对象 `{}`
 
 #### `request.body_str`
@@ -259,9 +279,7 @@ Worker 接收到的上下文模型为 `WorkerInput`：
 ## stdout 约定与样例
 
 Worker 最终必须通过 `stdout` 输出一个合法 JSON，用于表示 HTTP 响应。
-
 支持字段如下：
-
 - `status`：HTTP 状态码，可选，默认 `200`
 - `headers`：响应头，可选
 - `file`：Worker 目录中的相对文件路径，可选
@@ -299,7 +317,6 @@ Worker 最终必须通过 `stdout` 输出一个合法 JSON，用于表示 HTTP �
 ```
 
 说明：
-
 - `file` 必须是 Worker 目录内的相对路径
 - 不允许越界访问 Worker 目录外的文件
 
@@ -317,12 +334,10 @@ Worker 最终必须通过 `stdout` 输出一个合法 JSON，用于表示 HTTP �
 ### 上传文件
 
 适用场景：
-
 - 前端或客户端通过 `multipart/form-data` 上传文件
 - Worker 读取上传文件元信息，必要时再读取文件内容
 
 说明：
-
 - `multipart/form-data` 请求时，`request.body_str` 会是空字符串
 - 上传文件信息会出现在 `request.body`
 - 文件会被暂存到服务器临时目录，字段中会包含可读取的 `path`
@@ -372,6 +387,7 @@ def handler(ctx):
     "method": "POST",
     "body": {
       "title": "demo",
+      // key 值是 form-data 中的字段名
       "file": [
         {
           "filename": "hello.txt",
@@ -390,12 +406,10 @@ def handler(ctx):
 ### 下载文件
 
 适用场景：
-
 - Worker 动态生成文件后返回给客户端下载
 - 或直接返回 Worker 目录中已有的文件
 
 说明：
-
 - Worker 在沙箱内只能写 `/tmp`，不能写 Worker 根目录
 - 如果是动态生成文件，应该先把文件写到 `/tmp`，再通过 `file` 字段返回 `/tmp/...` 路径
 - 如果返回的是 Worker 目录中预先存在的文件，仍然使用相对路径即可
@@ -442,13 +456,11 @@ def handler(ctx):
 ### 使用 Worker 返回 HTML 页面
 
 适用场景：
-
 - 返回简单静态页面
 - 根据请求参数动态拼接 HTML
 - 做轻量级页面渲染
 
 说明：
-
 - 返回 HTML 可以通过将内容放入`body` 字段，或通过 `file` 字段返回 Worker 目录中的 HTML 文件
 - 设置 `Content-Type` 为 `text/html` 以确保浏览器正确解析
 - `index.html` 必须存在于当前 Worker 目录下
