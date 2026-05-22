@@ -109,3 +109,4 @@ description: Use when 需要通过已配置的 callit-mcp 按聊天指令创建�
 - [references/tools.md](./references/tools.md)：8 个 MCP tools 的作用、输入和副作用
 - [references/constraints.md](./references/constraints.md)：路由、文件名、入口文件、覆盖行为等硬约束
 - [references/worker_introduction.md](./references/worker_introduction.md)：已内置在 skill 中的完整 Worker 运行时协议与示例，创建或修改 Worker 代码前必须读取
+- [references/worker_sdk.md](./references/worker_sdk.md)：在 Worker 中内置的 sdk 文档，及数据持久化的相关说明
