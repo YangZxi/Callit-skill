@@ -89,9 +89,12 @@ description: Use when 需要通过已配置的 callit-mcp 按聊天指令创建�
 - Worker 默认遵循单文件原则，优先在 `main.py` 或 `main.js` 中实现需求；只有在功能复杂、代码量明显增大时，才考虑拆分多文件
 - Worker 的 `main` 文件中必须包含 `handler` 方法，否则 Worker 无法被调用
 - 更新 Worker 时，不要尝试传 `runtime`；`update_worker` 只允许改 `name`、`route`、`timeout_ms`、`enabled`
-- 文件名只能是 Worker 根目录下的单层文件名，不支持带 `/` 的路径
+- Worker 文件支持相对路径；目录以 `/` 结尾，服务端默认最多允许 3 层目录，且 Worker 根目录计为第 1 层
+- 文件路径遵循 Linux 命名规则；系统会自动移除路径开头的 `/` 和各级名称首尾空格
+- 创建嵌套文件时服务端会自动创建缺少的父目录；创建空目录时使用以 `/` 结尾的 `filename`
 - Worker runtime 是不可修改的，所以当碰到用户要求修改 runtime 的情况时，先停下来明确告诉用户这是不允许的，并询问他们是否想删除重建 Worker
 - 删除文件前，必须确认目标不是入口文件 `main.py` 或 `main.js`
+- 删除目录会递归删除其中全部文件和子目录，调用 `delete_worker_file` 前必须向用户明确说明并取得确认
 - `upload_worker_file` 和 `update_worker_file` 都会覆盖已有文件内容，执行前必须意识到这是覆盖写
 - 用户要求“新增文件”时，优先使用 `upload_worker_file`
 - 用户要求“改现有文件”时，优先使用 `update_worker_file`，若需要的修改的文件不是“文本内容文件”，则使用 `upload_worker_file`进行更新

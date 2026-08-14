@@ -62,12 +62,14 @@
 1. 调用 `search_workers(keyword)` 定位目标 Worker，如果你已经有确定的 Worker ID，可以直接跳过这一步
 2. `list_worker_files(worker_id)`
 3. 确认目标文件存在，且不是入口文件
-4. `delete_worker_file(worker_id, filename)`
-5. 返回删除后的文件列表或确认删除成功
+4. 如果目标是以 `/` 结尾的目录，向用户明确说明会同时删除其中全部文件和子目录，并取得确认
+5. `delete_worker_file(worker_id, filename)`
+6. 返回删除后的文件列表或确认删除成功
 
 注意：
 
 - 入口文件 `main.py` 或 `main.js` 不能删除
+- 目录删除是递归操作，未取得用户确认时不要调用
 
 ## 何时需要停下来问用户
 
